@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  # Service Frontend Next.js
+  frontend:
+    build:
+      context: ./frontend/bibliofrontend
+      dockerfile: Dockerfile
+    container_name: biblioflex-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:4400
+    depends_on:
+      - backend
+    networks:
+      - biblioflex-network
+    restart: unless-stopped
+
+  # Service Backend Node.js/Express
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: biblioflex-backend
+    ports:
+      - "4400:4400"
+    environment:
+      - DB_HOST=mysql
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - JWT_SECRET=${JWT_SECRET}
+      - SMTP_SERVICE=${SMTP_SERVICE}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - biblioflex-network
+    restart: unless-stopped
+
+  # Service Base de données MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: biblioflex-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./backend/Bibliothèque.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - biblioflex-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Service phpMyAdmin (optionnel, pour la gestion de la base de données)
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: biblioflex-phpmyadmin
+    environment:
+      - PMA_HOST=mysql
+      - PMA_PORT=3306
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+    networks:
+      - biblioflex-network
+    restart: unless-stopped
+
+# Définition des volumes
+volumes:
+  mysql-data:
+    driver: local
+
+# Définition du réseau
+networks:
+  biblioflex-network:
+    driver: bridge
+
+# Notes d'utilisation:
+# 1. Créer un fichier .env à la racine du projet avec les variables nécessaires
+# 2. Démarrer tous les services: docker-compose up -d
+# 3. Arrêter tous les services: docker-compose down
+# 4. Voir les logs: docker-compose logs -f [service]
+# 5. Accès aux services:
+#    - Frontend: http://localhost:3000
+#    - Backend: http://localhost:4400
+#    - phpMyAdmin: http://localhost:8080
